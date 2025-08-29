@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Cash Envelopes</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="app">
+        <header>
+            <h1>Digital Cash Envelopes <span class="badge">3D</span></h1>
+            <div class="controls">
+                <button class="iconbtn" id="prev" title="Previous">&#8592;</button>
+                <button class="iconbtn" id="next" title="Next">&#8594;</button>
+                <button class="btn" id="add">Add Envelope</button>
+            </div>
+        </header>
+
+        <div class="view-tabs">
+            <button class="view-tab active" id="envelopes-tab">Envelopes</button>
+            <button class="view-tab" id="dashboard-tab">Dashboard</button>
+        </div>
+
+        <section class="carousel-container" id="envelopes-view">
+            <div class="welcome-screen" id="welcome">
+                <h2>Welcome to Digital Cash Envelope</h2>
+                <p>Start by creating your first envelope to begin budgeting. Track your expenses and stay on budget with our 3D envelope system.</p>
+                <button class="btn" id="welcome-add">+ Add Your First Envelope</button>
+            </div>
+            <div class="track" id="track"></div>
+        </section>
+
+        <section class="dashboard" id="dashboard-view">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total Budget</h3>
+                    <div class="value" id="total-budget">₹0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Total Spent</h3>
+                    <div class="value" id="total-spent">₹0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Remaining Budget</h3>
+                    <div class="value" id="remaining-budget">₹0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Envelopes</h3>
+                    <div class="value" id="envelopes-count">0</div>
+                </div>
+            </div>
+
+            <div class="charts-container">
+                <div class="chart-card">
+                    <h3>Spending by Category</h3>
+                    <canvas id="category-chart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Budget vs Spent</h3>
+                    <canvas id="budget-chart"></canvas>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Add Envelope Modal -->
+    <dialog id="addDialog">
+        <form method="dialog" id="addForm">
+            <div class="modal-header">
+                <h3>New Envelope</h3>
+            </div>
+            <div class="form-row">
+                <input type="text" id="name" placeholder="Name (e.g., Groceries)" required>
+            </div>
+            <div class="form-row">
+                <input type="number" id="budget" placeholder="Budget (e.g., 5000)" min="1" step="1" required>
+                <input type="number" id="spent" placeholder="Spent (optional)" min="0" step="1">
+            </div>
+            <div class="form-actions">
+                <button class="btn secondary" value="cancel" id="cancelAdd">Cancel</button>
+                <button class="btn" value="default">Create</button>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- Delete Confirmation Modal -->
+    <dialog id="deleteDialog">
+        <div class="modal-header">
+            <h3>Delete Envelope</h3>
+        </div>
+        <div class="modal-body">
+            <p>Are you sure you want to delete this envelope?</p>
+        </div>
+        <div class="form-actions">
+            <button class="btn secondary" value="cancel">Cancel</button>
+            <button class="btn danger" id="confirmDelete" value="default">Delete</button>
+        </div>
+    </dialog>
+
+    <!-- Envelope Detail View -->
+    <div class="envelope-detail" id="envelopeDetail">
+        <div class="detail-header">
+            <h2 id="detailTitle">Envelope Details</h2>
+            <button class="close" id="closeDetail">Close</button>
+        </div>
+        <div class="detail-content">
+            <div class="budget-info">
+                <div class="budget-item">
+                    <h3>Budget</h3>
+                    <p id="detailBudget">₹0</p>
+                </div>
+                <div class="budget-item">
+                    <h3>Spent</h3>
+                    <p id="detailSpent">₹0</p>
+                </div>
+                <div class="budget-item">
+                    <h3>Remaining</h3>
+                    <p id="detailRemaining">₹0</p>
+                </div>
+            </div>
+            
+            <div class="expense-form">
+                <h3>Add Expense</h3>
+                <div class="form-grid">
+                    <input type="number" id="expenseAmount" placeholder="Amount (e.g., 250)" min="1" step="1">
+                    <input type="text" id="expenseNote" placeholder="Note (e.g., Groceries at supermarket)">
+                    <button class="btn" id="addExpense">Add</button>
+                </div>
+            </div>
+            
+            <div class="expense-log">
+                <h3>Expense History</h3>
+                <div class="log-items" id="expenseList"></div>
+            </div>
+        </div>
+    </div>
+
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-analytics.js";
+  import { 
+    getFirestore, 
+    collection, 
+    doc, 
+    setDoc, 
+    deleteDoc, 
+    updateDoc, 
+    onSnapshot, 
+    addDoc, 
+    serverTimestamp,
+    getDocs,
+    query,
+    orderBy
+  } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyARNjBxH_ZTknkOU08h69o-c_xX5oZY6Nc",
+    authDomain: "digital-cash-envelope.firebaseapp.com",
+    projectId: "digital-cash-envelope",
+    storageBucket: "digital-cash-envelope.firebasestorage.app",
+    messagingSenderId: "1659246454",
+    appId: "1:1659246454:web:5db24d416b253e751dcc57",
+    measurementId: "G-KN712KK9MN"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+  const db = getFirestore(app);
+  
+  // Make Firebase available globally for the main script
+  window.firebaseApp = app;
+  window.firebaseDb = db;
+  window.firebaseAnalytics = analytics;
+  
+  // Firebase database operations
+  window.firebaseOperations = {
+    // Save envelope to Firestore
+    async saveEnvelope(envelope) {
+      try {
+        await setDoc(doc(db, "envelopes", envelope.id), {
+          ...envelope,
+          updatedAt: serverTimestamp()
+        });
+        console.log('Envelope saved to Firebase:', envelope.id);
+      } catch (error) {
+        console.error('Error saving envelope to Firebase:', error);
+      }
+    },
+    
+    // Delete envelope from Firestore
+    async deleteEnvelope(envelopeId) {
+      try {
+        await deleteDoc(doc(db, "envelopes", envelopeId));
+        console.log('Envelope deleted from Firebase:', envelopeId);
+      } catch (error) {
+        console.error('Error deleting envelope from Firebase:', error);
+      }
+    },
+    
+    // Update envelope in Firestore
+    async updateEnvelope(envelopeId, updates) {
+      try {
+        await updateDoc(doc(db, "envelopes", envelopeId), {
+          ...updates,
+          updatedAt: serverTimestamp()
+        });
+        console.log('Envelope updated in Firebase:', envelopeId);
+      } catch (error) {
+        console.error('Error updating envelope in Firebase:', error);
+      }
+    },
+    
+    // Add expense to Firestore
+    async addExpense(envelopeId, expense) {
+      try {
+        await addDoc(collection(db, "expenses"), {
+          envelopeId: envelopeId,
+          amount: expense.amount,
+          note: expense.note,
+          date: expense.date,
+          createdAt: serverTimestamp()
+        });
+        console.log('Expense added to Firebase:', expense);
+      } catch (error) {
+        console.error('Error adding expense to Firebase:', error);
+      }
+    },
+    
+    // Load all envelopes from Firestore
+    async loadEnvelopes() {
+      try {
+        const querySnapshot = await getDocs(collection(db, "envelopes"));
+        const firebaseEnvelopes = [];
+        querySnapshot.forEach((doc) => {
+          firebaseEnvelopes.push({ id: doc.id, ...doc.data() });
+        });
+        return firebaseEnvelopes;
+      } catch (error) {
+        console.error('Error loading envelopes from Firebase:', error);
+        return [];
+      }
+    }
+  };
+</script>
+
+
+    <script src="script.js"></script>
+</body>
+</html>
